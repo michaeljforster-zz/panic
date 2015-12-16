@@ -2,5 +2,129 @@
 
 (in-package #:panic)
 
-;;; "panic" goes here. Hacks and glory await!
+(defun self-evaluating-form-p (form)
+  "Return true if FORM is a self-evaluating object, false otherwise.
 
+See CLHS 3.1.2.1.3 Self-Evaluating Objects."
+  (and (not (symbolp form))
+       (not (consp form))))
+
+(defun jsl-form-p (form)
+  "Return true if FORM is a JSL form, false otherwise.
+
+A JSL form is an extension of a Common Lisp compound form, with the
+car of the form being a keyword. See CLHS 3.1.2.1.2 Conses as Forms."
+  (and (consp form)
+       (keywordp (car form))))
+
+(defun destructure-jsl-form (form) 
+  "Return as multiple values the type (a keyword), props (a property
+list), and children (a list) of the JSL form FORM."
+  (let ((type (first form))
+	(props nil)
+	(children (rest form)))
+    (do ((rest (rest form) (cddr rest)))
+	((or (null (cdr rest))
+	     (not (keywordp (first rest))))
+	 (setf children rest))
+      (push (second rest) props)
+      (push (first rest) props))
+    (values type props children)))
+
+(defun walk-form (form)
+  "Walk the form FORM, expanding JSL forms into Parenscript function
+forms for React DOM operations, and return the resulting form."
+  (cond ((self-evaluating-form-p form)
+         form)
+        ((symbolp form)
+         form)
+        ((jsl-form-p form)
+         (multiple-value-bind (type props children)
+             (destructure-jsl-form form)
+           `(ps:chain -react -d-o-m
+                      (,(alexandria:ensure-symbol type)
+                        (ps:create ,@(mapcar #'(lambda (x)
+                                                 (if (keywordp x)
+                                                     (alexandria:ensure-symbol x)
+                                                     x))
+                                             props))
+                        ,@(mapcar #'walk-form children)))))
+        ((consp form)
+         form)
+        (t
+         (error "~A fell through COND expression." form))))
+
+(ps:defpsmacro jsl (form)
+  "Return the form FORM with any JSL forms expanded.
+
+JSL is a Lispy take on JSX, the React Javascript syntax extension.  A
+JSL form is a list with the first element being a keyword naming a
+React element type. All but the last of the remaining elements
+constitute a possibly empty list of alternating React property names
+and values. The last element is a possibly empty list of the children
+of the React element. See the React JSX documentation."
+  (walk-form form))
+
+(ps:defpsmacro defcomponent (name (&rest args
+                                         &key (display-name (string name))
+                                         get-initial-state
+                                         get-default-props
+                                         prop-types
+                                         mixins
+                                         statics
+                                         component-will-mount
+                                         component-did-mount
+                                         component-will-receive-props
+                                         should-component-update
+                                         component-will-update
+                                         component-did-update
+                                         component-will-unmount
+                                         &allow-other-keys)
+                                  &body render-body)
+  "Define a Parenscript special variable named NAME with the value
+being a React component class with DISPLAY-NAME attribute NAME, with a
+mandatory RENDER method having the body RENDER-BODY, and with optional
+lifecycle methods GET-INITIAL-STATE, GET-DEFAULT-PROPS, PROP-TYPES,
+MIXINS, STATICS, COMPONENT-WILL-MOUNT, COMPONENT-DID-MOUNT,
+COMPONENT-WILL-RECEIVE-PROPS, SHOULD-COMPONENT-UPDATE,
+COMPONENT-WILL-UPDATE, COMPONENT-DID-UPDATE, and
+COMPONENT-WILL-UNMOUNT.
+
+See the React Top Level API, Component API, and Component Specs and
+Lifecycle documentation."
+  (flet ((plist-with-symbols (plist)
+           (let ((new-plist '()))
+             (alexandria:doplist (k v plist new-plist)
+               (setf (getf new-plist (alexandria:ensure-symbol k)) v)))))
+    `(defvar ,name
+       (ps:chain -react
+                 (create-class
+                  (ps:create 'display-name ,display-name
+                             'render #'(lambda () ,@render-body)
+                             ,@(when get-initial-state `('get-initial-state ,get-initial-state))
+                             ,@(when get-default-props `('get-default-props ,get-default-props))
+                             ,@(when prop-types `('prop-types ,prop-types))
+                             ,@(when mixins `('mixins ,mixins))
+                             ,@(when statics `('statics ,statics))
+                             ,@(when component-will-mount `('component-will-mount ,component-will-mount))
+                             ,@(when component-did-mount `('component-did-mount ,component-did-mount))
+                             ,@(when component-will-receive-props `('component-will-receive-props ,component-will-receive-props))
+                             ,@(when should-component-update `('should-component-update ,should-component-update))
+                             ,@(when component-will-update `('component-will-update ,component-will-update))
+                             ,@(when component-did-update `('component-did-update ,component-did-update))
+                             ,@(when component-will-unmount `('component-will-unmount ,component-will-unmount))
+                             ,@(plist-with-symbols
+                                (alexandria:remove-from-plist args
+                                                              :display-name
+                                                              :get-initial-state
+                                                              :get-default-props
+                                                              :prop-types
+                                                              :mixins
+                                                              :statics
+                                                              :component-will-mount
+                                                              :component-did-mount
+                                                              :component-will-receive-props
+                                                              :should-component-update
+                                                              :component-will-update
+                                                              :component-did-update
+                                                              :component-will-unmount))))))))

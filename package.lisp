@@ -1,5 +1,6 @@
 ;;;; package.lisp
 
 (defpackage #:panic
-  (:use #:cl))
-
+  (:use #:cl)
+  (:export #:defcomponent
+           #:jsl))
