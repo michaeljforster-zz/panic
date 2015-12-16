@@ -21,4 +21,4 @@ the system with quicklisp:
 
 ### License
 
-Panic is distributed under the MIT license. See LICENSE.txt.
+Panic is distributed under the MIT license. See LICENSE.
