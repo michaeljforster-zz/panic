@@ -69,16 +69,16 @@ forms for React DOM operations, and return the resulting form."
          (multiple-value-bind (type props children)
              (destructure-jsl-form form)
            `(ps:chain -react (create-element ,(if (consp type)
-					                              (mapcar #'alexandria:ensure-symbol type)
-					                              (let ((sym (alexandria:ensure-symbol type)))
-					                                (if (eql #\- (aref (write-to-string sym) 0))
+						  (mapcar #'alexandria:ensure-symbol type)
+						  (let ((sym (alexandria:ensure-symbol type)))
+						    (if (eql #\- (aref (write-to-string sym) 0))
                                                         sym
-					                                    (string-downcase sym))))
-		                                     (ps:create ,@(mapcar #'(lambda (x)
-					                                                  (if (keywordp x)
-						                                                  (alexandria:ensure-symbol x)
+							(string-downcase sym))))
+					     (ps:create ,@(mapcar #'(lambda (x)
+								      (if (keywordp x)
+									  (alexandria:ensure-symbol x)
                                                                           x))
-					                                              props))
+								  props))
                                              ,@(mapcar #'walk-form children)))))
         ((consp form)
          form)
@@ -97,7 +97,7 @@ of the React element. See the React JSX documentation."
   (walk-form form))
 
 (ps:defpsmacro defcomponent (name (&rest args
-                                         &key (display-name (string (if (typep name 'cons)
+                                         &key (display-name (string (if (consp name)
 									(first (last name))
 									name)))
                                          get-initial-state
