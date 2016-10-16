@@ -42,10 +42,15 @@ car of the form being a keyword. See CLHS 3.1.2.1.2 Conses as Forms."
 (defun destructure-jsl-form (form) 
   "Return as multiple values the type (a keyword), props (a property
 list), and children (a list) of the JSL form FORM."
-  (let ((type (first form))
+  (let ((type (if (eq (first form) :@)
+		  (cons 'ps:@ (second form))
+		  (first form)))
 	(props nil)
 	(children (rest form)))
-    (do ((rest (rest form) (cddr rest)))
+    (do ((rest (if (eq (first form) :@)
+		   (cddr form)
+		   (rest form))
+	       (cddr rest)))
 	((or (null (cdr rest))
 	     (not (keywordp (first rest))))
 	 (setf children rest))
@@ -63,14 +68,18 @@ forms for React DOM operations, and return the resulting form."
         ((jsl-form-p form)
          (multiple-value-bind (type props children)
              (destructure-jsl-form form)
-           `(ps:chain -react -d-o-m
-                      (,(alexandria:ensure-symbol type)
-                        (ps:create ,@(mapcar #'(lambda (x)
-                                                 (if (keywordp x)
-                                                     (alexandria:ensure-symbol x)
-                                                     x))
-                                             props))
-                        ,@(mapcar #'walk-form children)))))
+           `(ps:chain -react (create-element ,(if (consp type)
+						  (mapcar #'alexandria:ensure-symbol type)
+						  (let ((sym (alexandria:ensure-symbol type)))
+						    (if (eql #\- (aref (write-to-string sym) 0))
+                                                        sym
+							(string-downcase sym))))
+					     (ps:create ,@(mapcar #'(lambda (x)
+								      (if (keywordp x)
+									  (alexandria:ensure-symbol x)
+                                                                          x))
+								  props))
+                                             ,@(mapcar #'walk-form children)))))
         ((consp form)
          form)
         (t
@@ -88,7 +97,9 @@ of the React element. See the React JSX documentation."
   (walk-form form))
 
 (ps:defpsmacro defcomponent (name (&rest args
-                                         &key (display-name (string name))
+                                         &key (display-name (string (if (consp name)
+									(first (last name))
+									name)))
                                          get-initial-state
                                          get-default-props
                                          prop-types
@@ -118,35 +129,35 @@ Lifecycle documentation."
            (let ((new-plist '()))
              (alexandria:doplist (k v plist new-plist)
                (setf (getf new-plist (alexandria:ensure-symbol k)) v)))))
-    `(defvar ,name
+    `(,(if (consp name) 'setf 'defvar) ,name
        (ps:chain -react
-                 (create-class
-                  (ps:create 'display-name ,display-name
-                             'render #'(lambda () ,@render-body)
-                             ,@(when get-initial-state `('get-initial-state ,get-initial-state))
-                             ,@(when get-default-props `('get-default-props ,get-default-props))
-                             ,@(when prop-types `('prop-types ,prop-types))
-                             ,@(when mixins `('mixins ,mixins))
-                             ,@(when statics `('statics ,statics))
-                             ,@(when component-will-mount `('component-will-mount ,component-will-mount))
-                             ,@(when component-did-mount `('component-did-mount ,component-did-mount))
-                             ,@(when component-will-receive-props `('component-will-receive-props ,component-will-receive-props))
-                             ,@(when should-component-update `('should-component-update ,should-component-update))
-                             ,@(when component-will-update `('component-will-update ,component-will-update))
-                             ,@(when component-did-update `('component-did-update ,component-did-update))
-                             ,@(when component-will-unmount `('component-will-unmount ,component-will-unmount))
-                             ,@(plist-with-symbols
-                                (alexandria:remove-from-plist args
-                                                              :display-name
-                                                              :get-initial-state
-                                                              :get-default-props
-                                                              :prop-types
-                                                              :mixins
-                                                              :statics
-                                                              :component-will-mount
-                                                              :component-did-mount
-                                                              :component-will-receive-props
-                                                              :should-component-update
-                                                              :component-will-update
-                                                              :component-did-update
-                                                              :component-will-unmount))))))))
+		  (create-class
+		   (ps:create 'display-name ,display-name
+			      'render #'(lambda () ,@render-body)
+			      ,@(when get-initial-state `('get-initial-state ,get-initial-state))
+			      ,@(when get-default-props `('get-default-props ,get-default-props))
+			      ,@(when prop-types `('prop-types ,prop-types))
+			      ,@(when mixins `('mixins ,mixins))
+			      ,@(when statics `('statics ,statics))
+			      ,@(when component-will-mount `('component-will-mount ,component-will-mount))
+			      ,@(when component-did-mount `('component-did-mount ,component-did-mount))
+			      ,@(when component-will-receive-props `('component-will-receive-props ,component-will-receive-props))
+			      ,@(when should-component-update `('should-component-update ,should-component-update))
+			      ,@(when component-will-update `('component-will-update ,component-will-update))
+			      ,@(when component-did-update `('component-did-update ,component-did-update))
+			      ,@(when component-will-unmount `('component-will-unmount ,component-will-unmount))
+			      ,@(plist-with-symbols
+				 (alexandria:remove-from-plist args
+							       :display-name
+							       :get-initial-state
+							       :get-default-props
+							       :prop-types
+							       :mixins
+							       :statics
+							       :component-will-mount
+							       :component-did-mount
+							       :component-will-receive-props
+							       :should-component-update
+							       :component-will-update
+							       :component-did-update
+							       :component-will-unmount))))))))
