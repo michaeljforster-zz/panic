@@ -53,7 +53,7 @@ the system with quicklisp:
     (panic:jsl
      (:div
       (:h3 "TODO")
-      (todo-list (ps:create :items (ps:@ this state items)))
+      (:-todo-list :items (ps:@ this state items))
       (:form :on-submit (ps:@ this handle-submit)
              (:input :on-change (ps:@ this on-change)
                      :value (ps:@ this state text))
